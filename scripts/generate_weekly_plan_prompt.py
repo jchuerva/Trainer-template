@@ -185,14 +185,34 @@ def format_workouts_summary(workouts):
     
     if other_workouts:
         summary.append(f"\nOther activities (for context/recovery assessment):")
+
+        # Group by sport type: show count and total duration/distance per type
+        sport_groups: dict[str, list] = {}
         for w in other_workouts:
+            sport_key = (w.get('type') or 'Unknown').strip()
+            sport_groups.setdefault(sport_key, []).append(w)
+
+        for sport_type, sport_ws in sorted(sport_groups.items()):
+            total_dist = sum(w['distance_km'] for w in sport_ws)
+            # Collect unique durations (non-empty)
+            durations = [w['time'] for w in sport_ws if w.get('time') and w['time'] not in ('-', '')]
+            dur_str = f", total time: {', '.join(durations)}" if durations else ""
+            dist_str = f"{total_dist:.2f} km" if total_dist > 0 else "\u2014"
+            summary.append(f"  \u2022 {sport_type}: {len(sport_ws)} session(s) \u2014 {dist_str}{dur_str}")
+
+        # Show last 5 non-running workouts with full detail
+        summary.append("\nRecent other workouts:")
+        for w in other_workouts[-5:]:
             hr_info = ""
             if w.get('avg_hr') and w.get('max_hr'):
                 hr_info = f" | HR: {w['avg_hr']} (max {w['max_hr']})"
             elif w.get('avg_hr'):
                 hr_info = f" | HR: {w['avg_hr']}"
-            summary.append(f"  - {w['date']}: {w.get('type', 'Unknown')} - {w['distance_km']:.2f} km in {w['time']}{hr_info}")
-    
+            workout_type = w.get('type', 'Unknown')
+            dist = w['distance_km']
+            dist_str = f"{dist:.2f} km" if dist > 0 else "\u2014"
+            summary.append(f"  - {w['date']}: {workout_type} - {dist_str} in {w['time']} (pace: {w['avg_pace']}/km{hr_info})")
+
     summary.append("\nRecent running workouts:")
     for w in running_workouts[-5:]:  # Last 5 running workouts
         hr_info = ""

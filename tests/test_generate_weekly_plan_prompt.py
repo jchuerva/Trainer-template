@@ -478,5 +478,96 @@ class TestGenerateCopilotPrompt:
         assert "plans/2030/01/week-2030-01-06.md" in prompt
 
 
+class TestExpandedNonRunningWorkoutSummary:
+    """Tests for expanded non-running workout breakdown (issue #3)."""
+
+    def _make_workout(self, date, workout_type, distance_km, time, avg_pace, avg_hr=None, max_hr=None):
+        return {
+            "date": date,
+            "type": workout_type,
+            "distance_km": distance_km,
+            "time": time,
+            "avg_pace": avg_pace,
+            "avg_hr": avg_hr,
+            "max_hr": max_hr,
+        }
+
+    def test_groups_by_sport_type(self):
+        """Non-running workouts should be grouped by sport type."""
+        workouts = [
+            self._make_workout("2026-01-08", "cycling", 20.0, "60:00", "3:00"),
+            self._make_workout("2026-01-09", "cycling", 25.0, "75:00", "3:00"),
+            self._make_workout("2026-01-10", "swimming", 1.5, "30:00", "20:00"),
+        ]
+        result = format_workouts_summary(workouts)
+        assert "cycling" in result
+        assert "swimming" in result
+
+    def test_shows_count_per_sport_type(self):
+        """Breakdown should show session count per sport type."""
+        workouts = [
+            self._make_workout("2026-01-08", "cycling", 20.0, "60:00", "3:00"),
+            self._make_workout("2026-01-09", "cycling", 25.0, "75:00", "3:00"),
+        ]
+        result = format_workouts_summary(workouts)
+        assert "2 session" in result
+
+    def test_shows_total_distance_per_sport_type(self):
+        """Breakdown should show total distance per sport type."""
+        workouts = [
+            self._make_workout("2026-01-08", "cycling", 20.0, "60:00", "3:00"),
+            self._make_workout("2026-01-09", "cycling", 5.0, "15:00", "3:00"),
+        ]
+        result = format_workouts_summary(workouts)
+        assert "25.00 km" in result  # 20 + 5
+
+    def test_shows_recent_other_workouts_label(self):
+        """Section should be labelled 'Recent other workouts:'."""
+        workouts = [
+            self._make_workout("2026-01-08", "cycling", 20.0, "60:00", "3:00"),
+        ]
+        result = format_workouts_summary(workouts)
+        assert "Recent other workouts:" in result
+
+    def test_recent_other_workouts_shows_last_5(self):
+        """Should show at most the last 5 non-running workouts in detail."""
+        workouts = [
+            self._make_workout(f"2026-01-{10 + i:02d}", "cycling", float(10 + i), "60:00", "3:00")
+            for i in range(8)  # 8 other workouts
+        ]
+        result = format_workouts_summary(workouts)
+        # The section heading should appear
+        assert "Recent other workouts:" in result
+        # The first three workouts should NOT appear in the detailed list (only last 5)
+        lines = [l for l in result.splitlines() if "Recent other workouts:" in l or
+                 (l.strip().startswith("-") and "2026-01-" in l)]
+        detail_lines = [l for l in result.splitlines() if l.strip().startswith("-") and "2026-01-" in l]
+        assert len(detail_lines) <= 5
+
+    def test_recent_other_workout_detail_includes_date_type_distance_hr(self):
+        """Each detailed non-running entry should include date, type, distance, and HR."""
+        workouts = [
+            self._make_workout("2026-01-08", "swimming", 1.5, "30:00", "20:00", avg_hr=128, max_hr=145),
+        ]
+        result = format_workouts_summary(workouts)
+        assert "2026-01-08" in result
+        assert "swimming" in result
+        assert "1.50 km" in result
+        assert "128" in result
+        assert "145" in result
+
+    def test_multiple_sport_types_each_have_own_row(self):
+        """Each distinct sport type should have its own summary row."""
+        workouts = [
+            self._make_workout("2026-01-07", "cycling", 20.0, "60:00", "3:00"),
+            self._make_workout("2026-01-08", "swimming", 1.5, "30:00", "20:00"),
+            self._make_workout("2026-01-09", "strength training", 0.0, "45:00", "-"),
+        ]
+        result = format_workouts_summary(workouts)
+        assert "cycling" in result
+        assert "swimming" in result
+        assert "strength training" in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
