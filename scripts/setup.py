@@ -51,7 +51,7 @@ def format_personal_info_for_goal(config):
     lines.append("## 👤 Personal Information")
     lines.append("")
     
-    runner = config.get('runner', {})
+    runner = config.get('athlete') or config.get('runner', {})
     
     # Date of birth only - training preferences go in "Training constraints / preferences" section
     if runner.get('date_of_birth'):
@@ -165,7 +165,7 @@ def format_personal_info_for_week_plan(config):
     lines.append("## 👤 Personal Information")
     lines.append("")
     
-    runner = config.get('runner', {})
+    runner = config.get('athlete') or config.get('runner', {})
     
     # Date of birth
     if runner.get('date_of_birth'):
@@ -178,7 +178,7 @@ def format_personal_info_for_week_plan(config):
         lines.append(f"- **Height:** {runner['height']} cm")
     
     lines.append("")
-    lines.append("<!-- **Note for AI Coach:** Use the above personal data (age from date of birth, weight, and height) along with recent workout history and heart rate data to calculate appropriate heart rate zones for this week's training. Consider the runner's current fitness level, training phase, and the specific goals for this week when determining zone ranges. -->")
+    lines.append("<!-- **Note for AI Coach:** Use the above personal data (age from date of birth, weight, and height) along with recent workout history and heart rate data to calculate appropriate heart rate zones for this week's training. Consider the athlete's current fitness level, training phase, and the specific goals for this week when determining zone ranges. -->")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -199,7 +199,7 @@ def format_personal_info_for_workout_analysis(config):
     lines.append("## 👤 Personal Information")
     lines.append("")
     
-    runner = config.get('runner', {})
+    runner = config.get('athlete') or config.get('runner', {})
     
     # Date of birth
     if runner.get('date_of_birth'):
@@ -212,7 +212,7 @@ def format_personal_info_for_workout_analysis(config):
         lines.append(f"- **Height:** {runner['height']} cm")
     
     lines.append("")
-    lines.append("<!-- **Note for AI Analyst:** Use the above personal data (age from date of birth, weight, and height) to estimate appropriate heart rate zones for analyzing this workout. Calculate zones based on common formulas (e.g., 220 - age for max HR) and the runner's physiology. -->")
+    lines.append("<!-- **Note for AI Analyst:** Use the above personal data (age from date of birth, weight, and height) to estimate appropriate heart rate zones for analyzing this workout. Calculate zones based on common formulas (e.g., 220 - age for max HR) and the athlete's physiology. -->")
     lines.append("")
     lines.append("---")
     lines.append("")

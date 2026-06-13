@@ -4,14 +4,14 @@
   "description": "Configuration schema for the running-trainer personal training assistant",
   "type": "object",
   "required": [
-    "runner",
+    "athlete",
     "preferences",
     "current_goal",
     "copilot"
   ],
   "additionalProperties": true,
   "properties": {
-    "runner": {
+    "athlete": {
       "type": "object",
       "description": "Personal physical information",
       "required": [

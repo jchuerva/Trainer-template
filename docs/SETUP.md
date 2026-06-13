@@ -28,7 +28,7 @@ python3 -m pip install -r requirements.txt
 All personal settings are centralized in `config/config.yaml`:
 
 ```yaml
-runner:
+athlete:
   date_of_birth: '1990-01-15'  # Your date of birth
   weight: 75                    # Weight in kg
   height: 180                   # Height in cm

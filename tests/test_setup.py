@@ -119,7 +119,7 @@ class TestFormatTrainingStatus:
     def test_missing_training_status_section(self):
         """Config without training_status section should return None."""
         config = {
-            "runner": {
+            "athlete": {
                 "date_of_birth": "1990-01-15"
             }
         }
