@@ -273,7 +273,7 @@ class TestGetTrainingStatusSection:
         with patch('generate_weekly_plan_prompt.read_config', return_value=mock_config):
             result = get_training_status_section()
             assert "Cold since Monday" in result
-            assert "Note from runner" in result
+            assert "Note from athlete" in result
 
     def test_injury_status_returns_alert(self):
         """Injury status should return appropriate alert."""

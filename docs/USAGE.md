@@ -242,7 +242,7 @@ Trigger plan generation anytime:
 
 1. Edit `config/config.yaml`:
    ```yaml
-   runner:
+   athlete:
      weight: 92.5  # Your new weight
    ```
 

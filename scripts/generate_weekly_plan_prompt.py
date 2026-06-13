@@ -307,7 +307,7 @@ def read_config():
 
 
 def get_training_status_section():
-    """Get training status section for the prompt if runner is not actively training."""
+    """Get training status section for the prompt if athlete is not actively training."""
     config = read_config()
     status_config = config.get('training_status', {})
     status = status_config.get('status', 'active')
@@ -331,10 +331,10 @@ def get_training_status_section():
     lines.append(status_descriptions.get(status, f'Status: {status}'))
     
     if status_config.get('note'):
-        lines.append(f"\n**Note from runner:** {status_config['note']}")
+        lines.append(f"\n**Note from athlete:** {status_config['note']}")
     
     lines.append("")
-    lines.append("**IMPORTANT:** Adjust the training plan according to this status. The runner's health and recovery take priority over any training goals.")
+    lines.append("**IMPORTANT:** Adjust the training plan according to this status. The athlete's health and recovery take priority over any training goals.")
     lines.append("")
     
     return "\n".join(lines)
@@ -366,7 +366,7 @@ def generate_copilot_prompt():
         penalty_prompt = f"""
 {penalty_section}
 
-**Note for AI Coach:** Include the "Run or Pay" section in the generated plan. This is a motivation feature - show empathy if there was a penalty, and encouragement if the runner completed all workouts.
+**Note for AI Coach:** Include the "Run or Pay" section in the generated plan. This is a motivation feature - show empathy if there was a penalty, and encouragement if the athlete completed all workouts.
 
 **CRITICAL:** Use ONLY the penalty data provided above. NEVER copy, infer, or estimate penalty information from the previous week's plan. If the data above shows "No penalty data available", state exactly that - do not make up completion numbers.
 """
@@ -401,7 +401,7 @@ Fill in the template with actual workout details based on:
 - When counting "runs" or "weekly volume", only include running workouts
 - Non-running activities provide valuable recovery and fatigue context but should not be included in the running plan itself
 - **Health data (HRV, RHR, sleep) is key for recovery assessment**: low HRV or high RHR indicate need to reduce intensity
-- If runner status is sick/injured/holidays/returning, adjust the plan accordingly - health comes first!
+- If athlete status is sick/injured/holidays/returning, adjust the plan accordingly - health comes first!
 
 Generate a complete, filled-in training plan ready to save as plans/{next_monday[:4]}/{next_monday[5:7]}/week-{next_monday}.md
 """

@@ -1,4 +1,4 @@
-runner:
+athlete:
   date_of_birth: 'YYYY-MM-DD'   # your date of birth (used for heart rate zone estimates)
   weight: 70.0                   # kg
   height: 175                    # cm
@@ -39,14 +39,14 @@ notes: 'This configuration file provides personal information to help AI trainin
 
   - Generate more suitable and realistic weekly training plans
 
-  - Create better workouts tailored to the runner''s profile
+  - Create better workouts tailored to the athlete''s profile
 
   - Analyze approximate heart rate zones during workout analysis
 
 
   Heart rate zones should be calculated dynamically by AI agents based on:
 
-  - Runner''s age (from date of birth)
+  - Athlete''s age (from date of birth)
 
   - Weight and height
 

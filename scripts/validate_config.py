@@ -129,8 +129,8 @@ def main():
     print()
     print("Configuration summary:")
     
-    runner = config.get('runner', {})
-    print(f"  - Runner: DOB {runner.get('date_of_birth')}, {runner.get('weight')}kg, {runner.get('height')}cm")
+    runner = config.get('athlete') or config.get('runner', {})
+    print(f"  - Athlete: DOB {runner.get('date_of_birth')}, {runner.get('weight')}kg, {runner.get('height')}cm")
     
     prefs = config.get('preferences', {})
     run_days = prefs.get('run_days', [])

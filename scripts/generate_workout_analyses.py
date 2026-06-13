@@ -242,16 +242,16 @@ def extract_fit_metrics(fit_path: Path, verbose: bool = False) -> str | None:
         return None
 
 
-def load_runner_profile(config_path: Path, verbose: bool = False) -> str:
+def load_athlete_profile(config_path: Path, verbose: bool = False) -> str:
     """
-    Load runner personal info from config/config.yaml and format it as markdown.
+    Load athlete personal info from config/config.yaml and format it as markdown.
     Returns an empty string if the file is missing or yaml is unavailable.
     """
     if yaml is None:
-        log("PyYAML not available — skipping runner profile injection", verbose)
+        log("PyYAML not available — skipping athlete profile injection", verbose)
         return ""
     if not config_path.exists():
-        log(f"config/config.yaml not found at {config_path} — skipping runner profile", verbose)
+        log(f"config/config.yaml not found at {config_path} — skipping athlete profile", verbose)
         return ""
 
     try:
@@ -261,10 +261,10 @@ def load_runner_profile(config_path: Path, verbose: bool = False) -> str:
         log(f"Failed to parse config/config.yaml: {e}", verbose)
         return ""
 
-    runner = cfg.get("runner", {})
+    runner = cfg.get("athlete") or cfg.get("runner", {})
     goal_cfg = cfg.get("current_goal", {})
 
-    lines = ["## Runner Profile", ""]
+    lines = ["## Athlete Profile", ""]
 
     dob = runner.get("date_of_birth")
     if dob:
@@ -387,12 +387,12 @@ def main() -> int:
 
     template_text = template_path.read_text(encoding="utf-8")
 
-    # Load runner profile once (injected into every prompt)
-    runner_profile = load_runner_profile(config_path, verbose=args.verbose)
+    # Load athlete profile once (injected into every prompt)
+    runner_profile = load_athlete_profile(config_path, verbose=args.verbose)
     if runner_profile:
-        log("Runner profile loaded and will be injected into prompts", args.verbose)
+        log("Athlete profile loaded and will be injected into prompts", args.verbose)
     else:
-        log("Runner profile unavailable — prompts will not include personal data", args.verbose)
+        log("Athlete profile unavailable — prompts will not include personal data", args.verbose)
 
     # List all FIT files recursively (covers YYYY/MM/fit/*.fit structure)
     fit_files = sorted(p for p in fits_root.rglob("*.fit") if p.is_file())
