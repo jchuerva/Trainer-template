@@ -169,6 +169,66 @@ def _run_copilot(
     return result.returncode
 
 
+def detect_sport_from_markdown(markdown: str) -> str:
+    """
+    Parse the sport field from the extracted FIT data markdown.
+    Looks for a line like: **Sport:** running
+    Returns the lowercase sport string, or 'unknown' if not found.
+    """
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("**Sport:**"):
+            sport = stripped.removeprefix("**Sport:**").strip().lower()
+            return sport
+    return "unknown"
+
+
+def build_agent_instructions(sport: str) -> str:
+    """
+    Build sport-specific agent instructions for the workout analysis prompt.
+    """
+    sport_lower = sport.lower()
+
+    if sport_lower in ("running", "walking", "hiking"):
+        coach_title = "expert running and endurance coach"
+        focus = "pace, cadence, and per-km splits"
+        next_session = "next run"
+    elif sport_lower == "cycling":
+        coach_title = "expert cycling coach"
+        focus = "power, cadence, and speed"
+        next_session = "next ride"
+    elif sport_lower == "swimming":
+        coach_title = "expert swimming coach"
+        focus = "stroke count, laps, and SWOLF score"
+        next_session = "next swim"
+    else:
+        coach_title = "expert fitness and training coach"
+        focus = "effort level, heart rate, and session duration"
+        next_session = "next session"
+
+    return f"""You are an {coach_title} and workout data analyst. Your job is to analyze **one workout session** from pre-extracted workout data and produce a clear, actionable markdown analysis.
+
+## Analysis Guidelines
+- Match the analysis depth to the workout type (easy vs quality session).
+- Always include:
+  - Segments/intervals or per-km splits (from the lap data table)
+  - Elevation/grade and cadence notes (if available)
+  - Focus especially on {focus}
+  - Heart-rate interpretation (zone estimate + whether it matches the session goal)
+  - Aerobic efficiency note
+  - Training load & recovery recommendation
+- End with **1–3 concrete action points** for the {next_session}.
+
+## Important Rules
+- Do **not** invent data you don't have.
+- Do **not** reference the template in the final analysis (no \"as per template…\").
+- Keep it tight: prefer bullet points; avoid long narratives.
+- **IMPORTANT**: The workout data is already extracted and provided. Do NOT try to read or decode FIT files yourself - use the data given to you.
+- **IMPORTANT**: Write the output file using the `edit` or `write` tool — do NOT print the content to stdout.
+- **IMPORTANT**: Ensure the file is fully written before finishing. Do not truncate or leave placeholders in the output.
+"""
+
+
 def extract_fit_metrics(fit_path: Path, verbose: bool = False) -> str | None:
     """
     Extract metrics from a FIT file and return as markdown.
@@ -374,28 +434,10 @@ def main() -> int:
         # Pre-extract FIT data so the agent doesn't need to execute code
         extracted_data = extract_fit_metrics(fit_path, verbose=args.verbose)
 
-        # Agent instructions embedded in prompt (copilot CLI doesn't support --agent flag)
-        agent_instructions = """You are an expert running coach and workout data analyst. Your job is to analyze **one workout session** from pre-extracted workout data and produce a clear, actionable markdown analysis.
-
-## Analysis Guidelines
-- Match the analysis depth to the workout type (easy vs quality session).
-- Always include:
-  - Segments/intervals or per-km splits (from the lap data table)
-  - Elevation/grade and cadence notes (if available)
-  - Pace assessment (steady/progressive/erratic; pacing discipline)
-  - Heart-rate interpretation (zone estimate + whether it matches the session goal)
-  - Aerobic efficiency note
-  - Training load & recovery recommendation
-- End with **1–3 concrete action points** for the next similar run.
-
-## Important Rules
-- Do **not** invent data you don't have.
-- Do **not** reference the template in the final analysis (no "as per template…").
-- Keep it tight: prefer bullet points; avoid long narratives.
-- **IMPORTANT**: The workout data is already extracted and provided. Do NOT try to read or decode FIT files yourself - use the data given to you.
-- **IMPORTANT**: Write the output file using the `edit` or `write` tool — do NOT print the content to stdout.
-- **IMPORTANT**: Ensure the file is fully written before finishing. Do not truncate or leave placeholders in the output.
-"""
+        # Detect sport from extracted data and build sport-specific agent instructions
+        sport = detect_sport_from_markdown(extracted_data) if extracted_data else "unknown"
+        log(f"Detected sport: {sport}", args.verbose)
+        agent_instructions = build_agent_instructions(sport)
 
         if extracted_data:
             log(f"Successfully extracted data from {fit_path.name}", args.verbose)
