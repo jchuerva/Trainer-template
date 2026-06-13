@@ -10,58 +10,55 @@
 - **Weight:** 70.0 kg
 - **Height:** 172 cm
 
-<!-- **Note for AI Analyst:** Use the above personal data (age from date of birth, weight, and height) to estimate appropriate heart rate zones for analyzing this workout. Calculate zones based on common formulas (e.g., 220 - age for max HR) and the runner's physiology. -->
+<!-- **Note for AI Analyst:** Use the above personal data (age from date of birth, weight, and height) to estimate appropriate heart rate zones for analyzing this workout. Calculate zones based on common formulas (e.g., 220 - age for max HR) and the athlete's physiology. -->
 
 ---
 
 <!-- END PERSONAL INFORMATION -->
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-> Use this template to analyze **one workout session**. Replace placeholders and delete sections that don’t apply.
+> Use this template to analyze **one workout session** across any sport. Replace placeholders and delete sections that don't apply.
+> Supported sports: 🏃 Running | 🚴 Cycling | 🏊 Swimming | 🚣 Rowing | 🎿 Cross-country skiing | and more.
 
 ---
 
 ## Workout Summary ([Date])
 
-- **Distance:** __.__ km
+- **Sport:** [Running / Cycling / Swimming / Rowing / Other]
+- **Distance:** __.__ km <!-- or meters for swimming -->
 - **Time:** __:__
-- **Average pace:** ~__:__ min/km
+- **Average pace/speed:** ~__:__ min/km <!-- For running/walking: min/km | For cycling: km/h or min/km | For swimming: min/100m | For rowing: min/500m -->
 - **Average HR:** __ bpm
 - **Max HR:** __ bpm
-- **Workout type:** [Easy / Long / Tempo / Intervals / Hills / Race]
+- **Workout type:** [Easy / Moderate / Hard / Race / Recovery]
+  <!-- Easy = low intensity, conversational pace
+       Moderate = comfortably hard, sustained effort
+       Hard = high intensity (intervals, tempo, threshold)
+       Race = all-out competitive effort
+       Recovery = very easy, active rest -->
 
 ### Summary
 
-[2–4 sentences summarizing the overall workout: what type of session it was, how the effort felt, the key highlights or issues (pacing, HR control, fatigue), and a one-line verdict on execution quality. This should read like the opening paragraph of a coach's debrief.]
+[2–4 sentences summarizing the overall workout: what type of session it was, how the effort felt, the key highlights or issues, and a one-line verdict on execution quality. This should read like the opening paragraph of a coach's debrief.]
 
 ---
 
 ## Technical Analysis
 
-### 1️⃣ Segments / Intervals (if available)
+### 1️⃣ Segments / Lap Data (if available)
 
 - **How it was structured:** [Continuous / Warm-up + reps + cool-down / Laps / Interval set]
 - **Key segments:**
   - Rep/segment: [e.g., 4×(3:00 hard / 2:00 easy)]
   - Consistency: [even / positive/negative split across reps]
-  - Recovery quality: [HR drop, pace stability]
+  - Recovery quality: [HR drop, pace/power stability]
 
-| Segment | Duration/Distance | Pace | Avg HR | Max HR | HR Zone | Notes |
+<!-- Generic columns — fill in what's relevant for your sport:
+     For running:  Pace (min/km) | Cadence (spm)
+     For cycling:  Speed (km/h) or Power (W) | Cadence (rpm)
+     For swimming: Pace (min/100m) | SWOLF | Strokes
+     For rowing:   Split (min/500m) | Stroke rate (spm) -->
+
+| Segment | Duration / Distance | Pace / Speed | Avg HR | Max HR | HR Zone | Notes |
 |---|---:|---:|---:|---:|---:|---|
 | — | — | — | — | — | — | — |
 
@@ -72,13 +69,15 @@
 - [Assess if HR zones were appropriate for the workout type]
 
 ✅ [Positive note about execution/consistency]
-⚠️ [If needed: adjustment for next time (pace, recovery, rep count)]
+⚠️ [If needed: adjustment for next time (pace, power, recovery, rep count)]
 
 ---
 
-### 2️⃣ Splits / Partials (each km)
+### 2️⃣ Splits / Partials
 
-| KM | Split time | Split pace | Avg HR | Max HR |
+<!-- For running: per km | For cycling: per km or segment | For swimming: per 100m | Delete if not applicable -->
+
+| Unit | Split time | Pace / Speed | Avg HR | Max HR |
 |---:|---:|---:|---:|---:|
 | 1 | — | — | — | — |
 
@@ -87,36 +86,47 @@
 
 ---
 
-### 3️⃣ Pace
+### 3️⃣ Pace / Power / Effort
 
-- [Was the pace steady, progressive, or erratic?]
+<!-- For running/swimming/rowing: focus on pace
+     For cycling: focus on power (watts) if available, then speed
+     Omit irrelevant metrics -->
+
+- [Was the effort steady, progressive, or erratic?]
 - [Any notable slowdowns/surges? Why?]
-- [Was the pace appropriate for the goal of the session?]
+- [Was the effort appropriate for the goal of the session?]
 
-✅ [Positive pacing note]
-⚠️ [If needed: pacing correction]
+✅ [Positive pacing/effort note]
+⚠️ [If needed: correction for next time]
 
 ---
 
-### 4️⃣ Elevation & grade
+### 4️⃣ Elevation & Terrain (if applicable)
+
+<!-- Skip for pool swimming, flat track sessions, or indoor trainers unless relevant -->
 
 - **Total ascent/descent:** __ m / __ m
-- **Terrain profile:** [flat / rolling / hilly]
-- **Impact:** [how hills affected pace + HR]
+- **Terrain profile:** [flat / rolling / hilly / open water / trails]
+- **Impact:** [how terrain affected pace, power, or HR]
 
-✅ [Good hill management note]
-⚠️ [If needed: adjust effort/stride on climbs]
+✅ [Good terrain management note]
+⚠️ [If needed: adjust effort on climbs/headwinds]
 
 ---
 
-### 5️⃣ Cadence
+### 5️⃣ Cadence / Stroke Rate (if available)
 
-- **Average cadence:** __ spm
-- **Cadence range:** __–__ spm
-- **Notes:** [form, fatigue, overstriding, cadence drop late]
+<!-- For running: steps per minute (spm) — target ~170–180 spm
+     For cycling: revolutions per minute (rpm) — target ~85–95 rpm
+     For swimming: strokes per minute or SWOLF score
+     For rowing: strokes per minute (spm) -->
+
+- **Average cadence/stroke rate:** __ [spm / rpm]
+- **Range:** __–__ [spm / rpm]
+- **Notes:** [form, fatigue, efficiency, drop late in session]
 
 ✅ [Positive cadence/form note]
-⚠️ [If needed: cue for next run]
+⚠️ [If needed: cue for next session]
 
 ---
 
@@ -124,23 +134,24 @@
 
 - **Average HR:** __ bpm
 - **Max HR:** __ bpm
-- **Where it likely sat:** [Z1 / Z2 / Z3 / Z4 / Z5]
+- **Dominant zone(s):** [Z1 / Z2 / Z3 / Z4 / Z5]
 
 **Interpretation (match to workout type):**
-- If **easy/aerobic**: aim mostly **Z2**; let pace adapt to HR.
+- If **easy/recovery**: aim mostly **Z1–Z2**; let pace/power adapt to HR.
 - If **quality session**: expect higher zones, but control spikes and recoveries.
+- If **race effort**: Z4–Z5 expected for shorter efforts; sustainable threshold for longer.
 
 📌 **What we want:**
 - [Target HR range or zone for this phase]
-- [Notes on drift (HR rising at same pace), heat, stress, hills, sleep]
+- [Notes on drift (HR rising at same pace/power), heat, stress, hills, sleep]
 
 ---
 
 ### 7️⃣ Aerobic Efficiency
 
-- Compare vs recent similar runs:
-  - Same pace? **[Higher/Lower] HR**
-  - Same HR? **[Faster/Slower] pace**
+- Compare vs recent similar sessions:
+  - Same pace/power? **[Higher/Lower] HR**
+  - Same HR? **[Faster/Slower] pace/power**
 
 ✅ [What improved]
 ⚠️ [What needs work]
@@ -164,12 +175,12 @@
 
 ---
 
-## Action Point for Next Runs
+## Action Point for Next Sessions
 
 For similar workouts:
-- **Primary constraint:** [Cap HR / Hold pace / Maintain cadence / Keep reps even]
-- **Target:** [HR __–__ bpm] or [pace __:__–__:__/km] or [RPE __/10]
-- **Adjustment if needed:** [Slow down, add walk breaks, shorten reps, extend recovery]
+- **Primary constraint:** [Cap HR / Hold pace / Maintain power / Keep reps even]
+- **Target:** [HR __–__ bpm] or [pace __:__–__:__ /unit] or [power __–__ W] or [RPE __/10]
+- **Adjustment if needed:** [Slow down, add rest, shorten reps, extend recovery]
 
 This will:
 - Build aerobic base / improve threshold / reduce injury risk / improve efficiency
