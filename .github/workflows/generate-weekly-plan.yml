@@ -1,0 +1,299 @@
+name: Generate Weekly Training Plan
+
+on:
+  schedule:
+    # Run every Sunday at 4:00 PM CET (15:00 UTC)
+    - cron: '0 15 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-plan:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Check if weekly plan generation is enabled
+        id: check_enabled
+        run: |
+          ENABLED=$(yq 'if .weekly_plan.enabled == null then "true" else .weekly_plan.enabled | tostring end' config/config.yaml)
+          if [ "$ENABLED" = "false" ]; then
+            REASON=$(yq '.weekly_plan.pause_reason // "No reason specified"' config/config.yaml)
+            echo "⏸️ Weekly plan generation is disabled in config/config.yaml"
+            echo "Reason: ${REASON}"
+            echo "To re-enable it, set weekly_plan.enabled: true in config/config.yaml"
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Weekly plan generation is enabled"
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rebuild workouts index
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: python3 scripts/build_workouts_index.py
+
+      - name: Calculate next Monday
+        id: date
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: |
+          # Calculate next Monday using dedicated script
+          OUTPUT=$(python3 scripts/calculate_next_monday.py)
+          NEXT_MONDAY=$(echo "$OUTPUT" | sed -n '1p')
+          YEAR=$(echo "$OUTPUT" | sed -n '2p')
+          MONTH=$(echo "$OUTPUT" | sed -n '3p')
+          
+          echo "next_monday=${NEXT_MONDAY}" >> $GITHUB_OUTPUT
+          echo "year=${YEAR}" >> $GITHUB_OUTPUT
+          echo "month=${MONTH}" >> $GITHUB_OUTPUT
+          echo "plan_dir=plans/${YEAR}/${MONTH}" >> $GITHUB_OUTPUT
+          echo "plan_file=plans/${YEAR}/${MONTH}/week-${NEXT_MONDAY}.md" >> $GITHUB_OUTPUT
+          echo "branch_name=weekly-plan-${NEXT_MONDAY}" >> $GITHUB_OUTPUT
+          
+          echo "Next Monday: ${NEXT_MONDAY}"
+          echo "Plan directory: plans/${YEAR}/${MONTH}"
+          echo "Plan file: plans/${YEAR}/${MONTH}/week-${NEXT_MONDAY}.md"
+          echo "Branch name: weekly-plan-${NEXT_MONDAY}"
+      
+      - name: Update penalties
+        if: steps.check_enabled.outputs.enabled == 'true'
+        continue-on-error: true
+        run: python3 scripts/run_or_pay.py
+
+      - name: Generate prompt
+        id: prompt
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: |
+          python3 scripts/generate_weekly_plan_prompt.py > /tmp/prompt.txt
+          cat /tmp/prompt.txt
+      
+      - name: Load setup config
+        id: setup
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: |
+          MODEL=$(yq '.copilot.plan_model // .copilot.model // ""' config/config.yaml)
+          if [ -n "$MODEL" ] && [ "$MODEL" != "null" ]; then
+            echo "model=--model $MODEL" >> $GITHUB_OUTPUT
+          else
+            echo "model=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set up Node.js
+        if: steps.check_enabled.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Install Copilot CLI
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: npm install -g @github/copilot
+      
+      - name: Generate plan with Copilot
+        id: copilot
+        if: steps.check_enabled.outputs.enabled == 'true'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+        run: |
+          mkdir -p ${{ steps.date.outputs.plan_dir }}
+          
+          PROMPT=$(cat /tmp/prompt.txt)
+          PROMPT="${PROMPT}
+          
+          Write the output directly to: ${{ steps.date.outputs.plan_file }}"
+          
+          copilot -p "$PROMPT" ${{ steps.setup.outputs.model }} --allow-all-tools
+          
+          if [ -f "${{ steps.date.outputs.plan_file }}" ]; then
+            echo "plan_file=${{ steps.date.outputs.plan_file }}" >> $GITHUB_OUTPUT
+            echo "plan_week=${{ steps.date.outputs.next_monday }}" >> $GITHUB_OUTPUT
+            echo "Plan created successfully"
+          else
+            echo "Error: Plan file not created" >&2
+            exit 1
+          fi
+      
+      - name: URL-encode plan path
+        id: plan_url
+        if: steps.check_enabled.outputs.enabled == 'true'
+        env:
+          PLAN_FILE: ${{ steps.copilot.outputs.plan_file }}
+          BRANCH_NAME: ${{ steps.date.outputs.branch_name }}
+        run: |
+          encoded=$(python -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["PLAN_FILE"], safe="/"))')
+          echo "encoded=${encoded}" >> $GITHUB_OUTPUT
+          echo "branch_url=https://github.com/${{ github.repository }}/blob/${BRANCH_NAME}/${encoded}" >> $GITHUB_OUTPUT
+
+      - name: Update README with latest plan
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: python3 scripts/update_readme_latest_plan.py
+      
+      - name: Create branch, commit, and push
+        id: commit
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Create a new branch for the weekly plan
+          BRANCH_NAME="${{ steps.date.outputs.branch_name }}"
+          git checkout -b "$BRANCH_NAME"
+          
+          git add plans/ README.md workouts/index.md config/data/penalties.yaml
+          git commit -m "🏃 Training plan for week ${{ steps.copilot.outputs.plan_week }}" \
+                     -m "Generated by Training Coach agent"
+          git push -u origin "$BRANCH_NAME"
+          
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        id: create_pr
+        if: success() && steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH_NAME="${{ steps.date.outputs.branch_name }}"
+          PLAN_WEEK="${{ steps.copilot.outputs.plan_week }}"
+          PLAN_FILE="${{ steps.copilot.outputs.plan_file }}"
+          
+          # Check if a PR already exists for this branch
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --state open --json number --jq '.[0].number // empty')
+          
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #${EXISTING_PR} already exists for this branch"
+            PR_URL=$(gh pr view "$EXISTING_PR" --json url --jq '.url')
+            echo "pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+            echo "pr_number=${EXISTING_PR}" >> $GITHUB_OUTPUT
+            echo "pr_created=false" >> $GITHUB_OUTPUT
+          else
+            PR_TITLE="🏃 Training Plan: Week of ${PLAN_WEEK}"
+            
+            # Build PR body
+            {
+              echo "## Weekly Training Plan"
+              echo ""
+              echo "This PR contains an auto-generated training plan for the week starting **${PLAN_WEEK}**."
+              echo ""
+              echo "### Plan File"
+              echo "- \`${PLAN_FILE}\`"
+              echo ""
+              echo "### Review Checklist"
+              echo "- [ ] Review the planned workouts"
+              echo "- [ ] Check if the plan aligns with your current fitness level"
+              echo "- [ ] Verify rest days are appropriate"
+              echo ""
+              echo "---"
+              echo "*Generated automatically by the AI Training Coach*"
+            } > /tmp/pr_body.md
+            
+            # Create the PR
+            PR_URL=$(gh pr create \
+              --title "$PR_TITLE" \
+              --body-file /tmp/pr_body.md \
+              --base main \
+              --head "$BRANCH_NAME")
+            
+            PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            
+            echo "pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+            echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+            echo "pr_created=true" >> $GITHUB_OUTPUT
+            echo "Created PR: ${PR_URL}"
+          fi
+      
+      - name: Build Telegram message
+        id: plan_msg
+        if: success() && steps.create_pr.outputs.pr_url != ''
+        env:
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          PR_CREATED: ${{ steps.create_pr.outputs.pr_created }}
+        run: |
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "🏃 *Weekly Training Plan Ready for Review!*" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "📅 *Week:* \`${{ steps.copilot.outputs.plan_week }}\`" >> $GITHUB_OUTPUT
+          echo "📁 *File:* \`${{ steps.copilot.outputs.plan_file }}\`" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          if [ "$PR_CREATED" = "true" ]; then
+            echo "✨ *New PR created*" >> $GITHUB_OUTPUT
+          else
+            echo "📝 *PR updated*" >> $GITHUB_OUTPUT
+          fi
+          echo "[Review & Merge PR](${PR_URL})" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "🤖 Generated by AI Training Coach" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram notification (Attempt 1)
+        id: telegram1
+        if: success() && steps.create_pr.outputs.pr_url != ''
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.plan_msg.outputs.message }}
+
+      - name: Send Telegram notification (Attempt 2)
+        id: telegram2
+        if: success() && steps.create_pr.outputs.pr_url != '' && steps.telegram1.outcome == 'failure'
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.plan_msg.outputs.message }}
+
+      - name: Send Telegram notification (Attempt 3)
+        if: success() && steps.create_pr.outputs.pr_url != '' && steps.telegram2.outcome == 'failure'
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.plan_msg.outputs.message }}
+      
+      - name: Summary
+        if: always()
+        env:
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          PR_CREATED: ${{ steps.create_pr.outputs.pr_created }}
+          PLAN_ENABLED: ${{ steps.check_enabled.outputs.enabled }}
+        run: |
+          if [ "$PLAN_ENABLED" = "false" ]; then
+            echo "## ⏸️ Weekly Plan Generation Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "Plan generation is disabled in \`config/config.yaml\` (\`weekly_plan.enabled: false\`)." >> $GITHUB_STEP_SUMMARY
+            echo "To re-enable, set \`weekly_plan.enabled: true\`." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          echo "## 🏃 Training Plan Generated" >> $GITHUB_STEP_SUMMARY
+          echo "**Week:** ${{ steps.copilot.outputs.plan_week }}" >> $GITHUB_STEP_SUMMARY
+          echo "**File:** \`${{ steps.copilot.outputs.plan_file }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ steps.date.outputs.branch_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$PR_URL" ]; then
+            if [ "$PR_CREATED" = "true" ]; then
+              echo "✨ **New PR created:** [View PR](${PR_URL})" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "📝 **Existing PR updated:** [View PR](${PR_URL})" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

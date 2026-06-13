@@ -1,0 +1,365 @@
+name: Generate workout analyses from FIT
+
+on:
+  push:
+    paths:
+      - 'workouts/**/fit/*.fit'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: generate-analyses-from-fit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    if: github.event_name == 'workflow_dispatch' || github.actor != 'github-actions[bot]' # Allow explicit dispatch (e.g. from migrate workflow); block bot-triggered pushes to avoid loops
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Load setup config
+        id: setup
+        run: |
+          MODEL=$(yq '.copilot.analysis_model // .copilot.model // ""' config/config.yaml)
+          if [ -n "$MODEL" ] && [ "$MODEL" != "null" ]; then
+            echo "model=$MODEL" >> $GITHUB_OUTPUT
+            echo "model_arg=--model" >> $GITHUB_OUTPUT
+          else
+            echo "model=" >> $GITHUB_OUTPUT
+            echo "model_arg=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Debug environment
+        run: |
+          echo "=== Environment Debug Info ==="
+          echo "Working directory: $(pwd)"
+          echo "User: $(whoami)"
+          echo ""
+          echo "=== Copilot CLI version ==="
+          copilot --version
+          echo ""
+          echo "=== Node version ==="
+          node --version
+          echo ""
+          echo "=== Python version ==="
+          python --version
+          echo ""
+          echo "=== Directory structure ==="
+          ls -la
+          echo ""
+          echo "=== FIT files ==="
+          find workouts -name "*.fit" | sort || echo "No FIT files found"
+          echo ""
+          echo "=== Analysis files ==="
+          find workouts -path "*/analysis/*.md" | sort || echo "No analysis files found"
+          echo ""
+          echo "=== Agent file ==="
+          cat .github/agents/workout-analyst.agent.md
+          echo ""
+          echo "=== Copilot token check ==="
+          if [ -n "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "COPILOT_GITHUB_TOKEN is set (length: ${#COPILOT_GITHUB_TOKEN})"
+          else
+            echo "WARNING: COPILOT_GITHUB_TOKEN is NOT set!"
+          fi
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+
+      - name: Generate missing analyses
+        id: analyses
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+        run: |
+          python scripts/generate_workout_analyses.py \
+            --fits-dir workouts \
+            --analysis-dir workouts \
+            --template templates/workout-analysis-template.md \
+            ${{ steps.setup.outputs.model_arg }} ${{ steps.setup.outputs.model }} \
+            --verbose \
+            > /tmp/new_analyses.txt
+
+          if [ -s /tmp/new_analyses.txt ]; then
+            echo "created_count=$(wc -l < /tmp/new_analyses.txt | tr -d ' ')" >> $GITHUB_OUTPUT
+          else
+            echo "created_count=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build workouts index
+        run: |
+          python scripts/build_workouts_index.py \
+            --analysis-dir workouts \
+            --fits-dir workouts \
+            --out-md workouts/index.md
+
+      - name: Commit and push
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git add workouts/ workouts/index.md
+          git commit -m "chore: generate workout analyses from FIT"
+
+          # For main branch, rebase to include any concurrent changes
+          # For workout branches, just push - the PR merge will handle conflicts
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            git pull --rebase origin main
+          fi
+          
+          git push origin HEAD:${{ github.ref_name }}
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Create PR for non-main branches
+        id: create_pr
+        if: success() && steps.commit.outputs.has_changes == 'true' && github.ref_name != 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if a PR already exists for this branch
+          EXISTING_PR=$(gh pr list --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')
+          
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #${EXISTING_PR} already exists for this branch"
+            PR_URL=$(gh pr view "$EXISTING_PR" --json url --jq '.url')
+            echo "pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+            echo "pr_number=${EXISTING_PR}" >> $GITHUB_OUTPUT
+            echo "pr_created=false" >> $GITHUB_OUTPUT
+          else
+            # Extract workout info from analysis files for PR title/body
+            WORKOUT_DATE=""
+            WORKOUT_TYPE=""
+            ANALYSIS_FILE=""
+            
+            if [ -f /tmp/new_analyses.txt ] && [ -s /tmp/new_analyses.txt ]; then
+              ANALYSIS_FILE=$(head -1 /tmp/new_analyses.txt)
+              WORKOUT_DATE=$(basename "$ANALYSIS_FILE" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || echo "")
+              WORKOUT_TYPE=$(basename "$ANALYSIS_FILE" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}-//' | sed -E 's/-.*//' || echo "Workout")
+            fi
+            
+            [ -z "$WORKOUT_DATE" ] && WORKOUT_DATE=$(date +%Y-%m-%d)
+            [ -z "$WORKOUT_TYPE" ] && WORKOUT_TYPE="Workout"
+            
+            PR_TITLE="🏃 ${WORKOUT_TYPE} analysis for ${WORKOUT_DATE}"
+            
+            {
+              echo "## Workout Analysis"
+              echo ""
+              echo "This PR contains an auto-generated analysis for a workout uploaded via iOS Shortcut."
+              echo ""
+              echo "### Files"
+              if [ -f /tmp/new_analyses.txt ] && [ -s /tmp/new_analyses.txt ]; then
+                while IFS= read -r relpath; do
+                  [ -z "$relpath" ] && continue
+                  fname=$(basename "$relpath")
+                  echo "- \`${fname}\`"
+                done < /tmp/new_analyses.txt
+              fi
+              echo ""
+              echo "---"
+              echo "*Generated automatically by the workout analysis workflow*"
+            } > /tmp/pr_body.md
+            
+            PR_URL=$(gh pr create \
+              --title "$PR_TITLE" \
+              --body-file /tmp/pr_body.md \
+              --base main \
+              --head "${{ github.ref_name }}")
+            
+            PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            
+            echo "pr_url=${PR_URL}" >> $GITHUB_OUTPUT
+            echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+            echo "pr_created=true" >> $GITHUB_OUTPUT
+            echo "Created PR: ${PR_URL}"
+          fi
+
+      - name: Build Telegram message
+        id: analysis_msg
+        if: success() && steps.analyses.outputs.created_count != '0' && github.ref_name == 'main'
+        env:
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+        run: |
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "🏃 *New Workout Analysis Generated!*" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          while IFS= read -r relpath; do
+            [ -z "$relpath" ] && continue
+            fname=$(basename "$relpath")
+            encoded=$(python -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$relpath")
+            url="https://github.com/${REPO}/blob/${REF}/${encoded}"
+            echo "📁 *File:* \`${fname}\`" >> $GITHUB_OUTPUT
+            echo "[View Analysis](${url})" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+          done < /tmp/new_analyses.txt
+          echo "🤖 Generated by AI Workout Analyst" >> $GITHUB_OUTPUT
+          echo "✅ Ready to view in repository" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram notification (Attempt 1)
+        id: telegram1
+        if: success() && steps.analyses.outputs.created_count != '0' && github.ref_name == 'main'
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.analysis_msg.outputs.message }}
+
+      - name: Send Telegram notification (Attempt 2)
+        id: telegram2
+        if: success() && steps.analyses.outputs.created_count != '0' && github.ref_name == 'main' && steps.telegram1.outcome == 'failure'
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.analysis_msg.outputs.message }}
+
+      - name: Send Telegram notification (Attempt 3)
+        if: success() && steps.analyses.outputs.created_count != '0' && github.ref_name == 'main' && steps.telegram2.outcome == 'failure'
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.analysis_msg.outputs.message }}
+
+      - name: Build Telegram PR message
+        id: pr_msg
+        if: success() && steps.create_pr.outputs.pr_url != ''
+        env:
+          REPO: ${{ github.repository }}
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          PR_CREATED: ${{ steps.create_pr.outputs.pr_created }}
+        run: |
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "🏃 *Workout Analysis Ready for Review!*" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          
+          if [ -f /tmp/new_analyses.txt ] && [ -s /tmp/new_analyses.txt ]; then
+            while IFS= read -r relpath; do
+              [ -z "$relpath" ] && continue
+              fname=$(basename "$relpath")
+              echo "📁 \`${fname}\`" >> $GITHUB_OUTPUT
+            done < /tmp/new_analyses.txt
+            echo "" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ "$PR_CREATED" = "true" ]; then
+            echo "✨ *New PR created*" >> $GITHUB_OUTPUT
+          else
+            echo "📝 *PR updated*" >> $GITHUB_OUTPUT
+          fi
+          echo "[Review & Merge PR](${PR_URL})" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "🤖 Generated by AI Workout Analyst" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send PR Telegram notification (Attempt 1)
+        id: telegram_pr1
+        if: success() && steps.create_pr.outputs.pr_url != ''
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.pr_msg.outputs.message }}
+
+      - name: Send PR Telegram notification (Attempt 2)
+        id: telegram_pr2
+        if: success() && steps.create_pr.outputs.pr_url != '' && steps.telegram_pr1.outcome == 'failure'
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.pr_msg.outputs.message }}
+
+      - name: Send PR Telegram notification (Attempt 3)
+        if: success() && steps.create_pr.outputs.pr_url != '' && steps.telegram_pr2.outcome == 'failure'
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: ${{ steps.pr_msg.outputs.message }}
+
+      - name: Build summary
+        id: analysis_summary
+        if: always()
+        env:
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          CREATED_COUNT: ${{ steps.analyses.outputs.created_count }}
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          PR_CREATED: ${{ steps.create_pr.outputs.pr_created }}
+        run: |
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "## Workout analysis generation" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "**New analyses created:** ${CREATED_COUNT}" >> $GITHUB_OUTPUT
+
+          if [ -f /tmp/new_analyses.txt ] && [ -s /tmp/new_analyses.txt ]; then
+            echo "" >> $GITHUB_OUTPUT
+            echo "### New analysis files" >> $GITHUB_OUTPUT
+            while IFS= read -r relpath; do
+              [ -z "$relpath" ] && continue
+              fname=$(basename "$relpath")
+              encoded=$(python -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$relpath")
+              url="https://github.com/${REPO}/blob/${REF}/${encoded}"
+              echo "- [\`${fname}\`](${url})" >> $GITHUB_OUTPUT
+            done < /tmp/new_analyses.txt
+          fi
+
+          if [ -n "$PR_URL" ]; then
+            echo "" >> $GITHUB_OUTPUT
+            echo "### Pull Request" >> $GITHUB_OUTPUT
+            if [ "$PR_CREATED" = "true" ]; then
+              echo "✨ **New PR created:** [View PR](${PR_URL})" >> $GITHUB_OUTPUT
+            else
+              echo "📝 **Existing PR updated:** [View PR](${PR_URL})" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        if: always()
+        env:
+          SUMMARY: ${{ steps.analysis_summary.outputs.summary }}
+        run: |
+          printf '%s\n' "$SUMMARY" >> $GITHUB_STEP_SUMMARY

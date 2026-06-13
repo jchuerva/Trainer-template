@@ -1,0 +1,74 @@
+name: Migrate inbox FIT to YYYY/MM
+
+on:
+  push:
+    paths:
+      - 'workouts/inbox/*.fit'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: migrate-inbox-fit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Migrate inbox FIT files to YYYY/MM/fit/
+        run: |
+          if ls workouts/inbox/*.fit 2>/dev/null | head -1 > /dev/null; then
+            echo "Found FIT files in inbox, migrating..."
+            python scripts/migrate_workouts.py --inbox workouts/inbox
+          else
+            echo "No FIT files in inbox — nothing to do."
+            exit 0
+          fi
+
+      - name: Commit and push migrated files
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git add workouts/
+          git commit -m "chore: migrate inbox FIT files to YYYY/MM structure"
+
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            git pull --rebase origin main
+          fi
+
+          git push origin HEAD:${{ github.ref_name }}
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Trigger workout analysis
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Triggering generate-analyses-from-fit workflow..."
+          gh workflow run generate-analyses-from-fit.yml --ref ${{ github.ref_name }}
+          echo "Analysis workflow triggered."

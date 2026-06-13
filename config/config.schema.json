@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Running Trainer Configuration",
+  "description": "Configuration schema for the running-trainer personal training assistant",
+  "type": "object",
+  "required": [
+    "runner",
+    "preferences",
+    "current_goal",
+    "copilot"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "runner": {
+      "type": "object",
+      "description": "Personal physical information",
+      "required": [
+        "date_of_birth",
+        "weight",
+        "height"
+      ],
+      "properties": {
+        "date_of_birth": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Date of birth in YYYY-MM-DD format"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 30,
+          "maximum": 200,
+          "description": "Weight in kilograms"
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 250,
+          "description": "Height in centimeters"
+        }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "description": "Training schedule preferences",
+      "required": [
+        "run_days",
+        "long_run_day",
+        "weekly_runs"
+      ],
+      "properties": {
+        "run_days": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+              "Sunday"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 7,
+          "description": "Days of the week for running"
+        },
+        "long_run_day": {
+          "type": "string",
+          "enum": [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday"
+          ],
+          "description": "Day for the long run"
+        },
+        "strength_day": {
+          "type": "string",
+          "enum": [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday"
+          ],
+          "description": "Day for strength training (optional)"
+        },
+        "weekly_runs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7,
+          "description": "Number of runs per week"
+        }
+      }
+    },
+    "current_goal": {
+      "type": "object",
+      "description": "Current training goal",
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^config/goals/.+\\.md$",
+          "description": "Path to the goal file (must be in config/goals/ directory)"
+        }
+      }
+    },
+    "training_status": {
+      "type": "object",
+      "description": "Current training status (active, sick, injury, holidays, returning)",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "sick",
+            "injury",
+            "holidays",
+            "returning"
+          ],
+          "description": "Current training status"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional note about the status (e.g., 'Sick since Monday, hoping to return by weekend')"
+        }
+      }
+    },
+    "run_or_pay": {
+      "type": "object",
+      "description": "Optional motivation feature: accumulate a penalty for missed workouts",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the Run or Pay feature (disabled by default)"
+        },
+        "penalty_per_week": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Penalty amount in your currency for each week with missed workouts (no maximum - depends on your currency and motivation level)"
+        },
+        "currency": {
+          "type": "string",
+          "default": "EUR",
+          "description": "Currency symbol for display (e.g., EUR, USD, GBP)"
+        }
+      }
+    },
+    "copilot": {
+      "type": "object",
+      "description": "GitHub Copilot configuration",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Copilot model fallback (used when plan_model/analysis_model are not set)"
+        },
+        "plan_model": {
+          "type": "string",
+          "description": "Model for weekly training plan generation (generate-weekly-plan workflow)"
+        },
+        "analysis_model": {
+          "type": "string",
+          "description": "Model for per-workout analysis (generate-analyses-from-fit workflow)"
+        }
+      }
+    },
+    "weekly_plan": {
+      "type": "object",
+      "description": "Controls automatic weekly training plan generation",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Set to false to pause automatic weekly plan generation (GitHub Actions workflow will skip execution)"
+        },
+        "pause_reason": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional note explaining why plan generation is paused (e.g., 'On vacation', 'Recovering from injury')"
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notes about the configuration file"
+    }
+  }
+}

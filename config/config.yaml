@@ -1,0 +1,57 @@
+runner:
+  date_of_birth: 'YYYY-MM-DD'   # your date of birth (used for heart rate zone estimates)
+  weight: 70.0                   # kg
+  height: 175                    # cm
+
+preferences:
+  run_days:
+    - Tuesday
+    - Thursday
+    - Saturday
+  long_run_day: Saturday
+  strength_day: Sunday
+  weekly_runs: 3
+
+current_goal:
+  file: config/goals/my-goal.md  # path to your goal file (see templates/goal-template.md)
+
+training_status:
+  status: active   # active | sick | holidays | paused
+  note: ''
+
+weekly_plan:
+  enabled: true
+  pause_reason: ''
+
+run_or_pay:
+  enabled: false
+  penalty_per_week: 5
+  currency: EUR
+
+copilot:
+  plan_model: claude-sonnet-4.6      # model used for weekly plan generation
+  analysis_model: claude-haiku-4.5   # model used for workout analysis (cheaper)
+
+notes: 'This configuration file provides personal information to help AI training
+  coaches:
+
+  - Use date of birth, weight, and height to estimate heart rate zones
+
+  - Generate more suitable and realistic weekly training plans
+
+  - Create better workouts tailored to the runner''s profile
+
+  - Analyze approximate heart rate zones during workout analysis
+
+
+  Heart rate zones should be calculated dynamically by AI agents based on:
+
+  - Runner''s age (from date of birth)
+
+  - Weight and height
+
+  - Recent workout data and heart rate responses
+
+  - Current training phase and goals
+
+  '
